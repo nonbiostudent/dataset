@@ -3,12 +3,14 @@ import warnings
 
 import numpy as np
 import tables
-from tables.group import Group
 from tables.exceptions import NoSuchNodeError, NodeError
 
-from spectroscopy.class_factory import ResourceIdentifier
-from spectroscopy.plugins import get_registered_plugins
-from spectroscopy.datamodel import all_classes
+from dataset.class_factory import ResourceIdentifier
+from dataset.plugins import get_registered_plugins
+
+_all_classes = None
+
+
 
 
 class Dataset(object):
@@ -37,9 +39,14 @@ class Dataset(object):
     """
 
     def __init__(self, filename, mode):
+        
+        if _all_classes is None:
+            raise ValueError("dataset.set_datamodel() must be called prior to " 
+                             "creating a Dataset object")
+        
         self.elements = {}
         self.base_elements = {}
-        for c in all_classes:
+        for c in _all_classes:
             name = c.__name__.strip('_') 
             self.elements[name] = []
             self.base_elements[name+'Buffer'] = c

@@ -131,7 +131,7 @@ class MyPyRenderer(ObjRenderer):
         s = ""
         s += "import numpy as np\n"
         s += "import datetime\n"
-        s += "from spectroscopy.class_factory import _class_factory\n" 
+        s += "from dataset.class_factory import _class_factory\n" 
         return s
 
     def build_documentation(self,k):
@@ -281,7 +281,7 @@ class MyPyRenderer(ObjRenderer):
         self.built = []
         ObjRenderer.end_render(self)
 
-dia.register_export ("Gas chemistry code generation (Python)", "py", MyPyRenderer())
+dia.register_export ("Datamodel code generation (Python)", "py", MyPyRenderer())
 
 
 

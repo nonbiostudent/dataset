@@ -1,24 +1,16 @@
-import calendar
 import collections
-from copy import copy, deepcopy
+from copy import deepcopy
 import datetime
 import hashlib
 import inspect
-import string
 from uuid import uuid4
 import warnings
 import weakref
 
-from dateutil import tz
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize, LogNorm
-from matplotlib.pyplot import cm
 import numpy as np
 import tables
-from scipy.stats import binned_statistic
 
-from spectroscopy.plugins import get_registered_plugins, DatasetPluginBase
-import spectroscopy.util
+import dataset.util
 
 class ResourceIdentifier(object):
     """
@@ -766,12 +758,12 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                             if attrib_type[1] == datetime.datetime:
                                 _vals = []
                                 for v in value:
-                                    _vals.append(spectroscopy.util.parse_iso_8601(v).isoformat())
+                                    _vals.append(dataset.util.parse_iso_8601(v).isoformat())
                                 value = np.array(_vals)
                             else:
                                 value = np.array(value).astype(attrib_type[1])
                         elif self._property_dict[name][0] == datetime.datetime:
-                            value = spectroscopy.util.parse_iso_8601(value).isoformat()
+                            value = dataset.util.parse_iso_8601(value).isoformat()
                         else:
                             value = attrib_type[0](value)
                 except ValueError:

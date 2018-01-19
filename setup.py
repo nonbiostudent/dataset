@@ -10,19 +10,17 @@ from setuptools.command.install import install
 
 # do the build/install
 setup(
-    name="spectroscopy",
+    name="dataset",
     version="0.1",
-    description="Python package for processing field spectroscopy data.",
-    long_description="Python package for processing field spectroscopy data.",
+    description="Python package for creating and managing datasets in HDF5 format.",
+    long_description="Python package for creating and managing datasets in HDF5 format.",
     author="Yannik Behr and Nial Peters",
     author_email="y.behr@gns.cri.nz",
     url="",
     license="GPL v3",
     package_dir={'': 'src'},
-    install_requires=['tables', 'numpy', 'matplotlib', 'scipy',
-                      'python-dateutil', 'cartopy', 'pyproj'],
-    packages=['spectroscopy', 'spectroscopy.flux', 'spectroscopy.doas',
-                'spectroscopy.plugins'],
+    install_requires=['tables', 'numpy'],
+    packages=['dataset'],
     test_suite='nose.collector',
     test_require=['nose']
 )

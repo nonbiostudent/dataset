@@ -178,7 +178,7 @@ def get_wind_speed(gf,lon,lat,elev,date):
         standard.
     """
     from scipy.spatial import KDTree
-    from spectroscopy.util import parse_iso_8601
+    from dataset.util import parse_iso_8601
     if not isinstance(date,datetime.datetime):
         _d = parse_iso_8601(date)
     else:
