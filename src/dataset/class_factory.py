@@ -1,5 +1,5 @@
 import collections
-from copy import deepcopy
+from copy import deepcopy, copy
 import datetime
 import hashlib
 import inspect
@@ -495,7 +495,7 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                  np.int64: tables.IntAtom(),
                  np.string_: tables.StringAtom(itemsize=128)}
 
-        def __init__(self, h5node, data_buffer=None, pedantic=False):
+        def __init__(self, h5node, data_buffer=None, pedantic=True):
             # Set the parent HDF5 group after type checking
             if (type(h5node) is not tables.group.Group):
                 raise Exception("%s and %s are incompatible types." %
@@ -511,7 +511,17 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
             else:
                 self.__dict__['creation_time'] = h5node._v_attrs.creation_time
 
-
+            #add all the _properties as properties of the class, so that they 
+            #can be seen by tab completion (otherwise the user cannot see what 
+            #properties the class has without accessing the _properites dict)
+            for att_name, junk in self._properties:
+                
+                #use of kwarg in lambda function required to prevent 'name' being
+                #overriden by subsequent iterations of this for loop.
+                p = property(lambda self, name=att_name: self.__getattr__(name))
+                setattr(self.__class__, att_name, p)
+            
+            
             if data_buffer is not None:
                 dtp = []
                 vals = {}
@@ -590,11 +600,12 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                 '{} attributes are read only. Use append method instead.'.format(type(self).__name__))
 
         def __getattr__(self, name):
+            print "__getattr__(%s)"%name
             table = getattr(self._root,'data')
             if name in self._property_keys:
                 if self._property_dict[name][0] == np.ndarray:
                     return RetVal(getattr(self._root,name))
-                return RetVal(getattr(table.cols,name))
+                return RetVal(getattr(table.cols,name))[0]
             elif name in self._reference_keys:
                 if self._reference_dict[name][0] == np.ndarray:
                     _t = []
@@ -634,7 +645,7 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
         """
         A base class with type checking for extendable elements in the datamodel.
         """
-        def __init__(self, h5node, data_buffer=None, pedantic=False):
+        def __init__(self, h5node, data_buffer=None, pedantic=True):
             super(ExpandableDataElement,self).__init__(h5node,data_buffer,pedantic)
             self.__dict__['modification_time'] = self.creation_time 
             h5node._v_attrs.modification_time = self.modification_time
@@ -656,10 +667,23 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
             msg += "Last modified at: {:s}\n".format(self._root._v_attrs.creation_time)
             return msg
 
-        def append(self, databuffer):
+        def append(self, databuffer, pedantic=True):
             table = getattr(self._root, 'data')
             s = hashlib.sha1()
             entry = table.row
+            
+            for prop_name in self._properties.keys():
+                try:
+                    key, val = databuffer.__dict__[prop_name]
+                except KeyError:
+                    if pedantic:
+                        msg = ("{} is missing a value for the {} field. Cannot "
+                               "append incomplete buffers when 'pedantic=True'."
+                               " ".format(str(databuffer), prop_name))
+                        raise ValueError(msg)
+                    else:
+                        continue
+            
             for key,val in databuffer.__dict__.iteritems():
                 if val is not None:
                     try:
@@ -673,6 +697,7 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                     else:
                         entry[key] = val
                     s.update('{}'.format(val))
+                
             h = s.digest()
             if h in table[:]['hash']:
                 raise ValueError('Entry already exists.')

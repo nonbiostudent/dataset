@@ -48,7 +48,11 @@ class Dataset(object):
         self.base_elements = {}
         for c in _all_classes:
             name = c.__name__.strip('_') 
-            self.elements[name] = []
+            self.elements[c.__dest__] = []
+            #if self.elements.__dict__.has_key(c.__dest__):
+             #   raise ValueError("Forbidden element destination %s"%c.__dest__)
+            
+            #self.elements.__dict__[c.__dest__] = self.elements[c.__dest__]
             self.base_elements[name+'Buffer'] = c
         self._rids = {}
         self._f = tables.open_file(filename, mode)
@@ -148,26 +152,27 @@ class Dataset(object):
             raise RuntimeError(msg)
         return type(src)(dstgroup)
 
-    def new(self, data_buffer, pedantic=False):
+    def new(self, data_buffer, pedantic=True):
         """
         Create a new entry in the HDF5 file from the given data buffer.
         """
         if pedantic:
             s = hashlib.sha224()
             # If data buffer is empty raise an exception
-            empty = True
+            incomplete = False
             for k,v in data_buffer.__dict__.iteritems():
                 if k == 'tags':
                     continue
                 if v is not None:
                     if k in data_buffer._property_dict.keys():
                         s.update('{}'.format(v))
-                    empty = False
-            if empty:
-                raise ValueError("You can't add empty buffers if 'pedantic=True'.")
+                else:
+                    incomplete = True
+            if incomplete:
+                raise ValueError("You cannot add incomplete buffers if 'pedantic=True'.")
 
         _C = self.base_elements[type(data_buffer).__name__]
-        group_name = _C.__name__.strip('_')
+        group_name = _C.__dest__#_C.__name__.strip('_')
         rid = ResourceIdentifier()
         try:
             self._f.create_group('/',group_name)
