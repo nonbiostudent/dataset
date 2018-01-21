@@ -142,7 +142,7 @@ class MyPyRenderer(ObjRenderer):
         s = "\t'''\n"
         s += "\t{:s}\n\n".format(k.comment)
         for n,att in k.attributes:
-            if n in ['resource_id', 'creation_time', 'modification_time']:
+            if n in ['resource_id', 'creation_time', 'modification_time', '__dest__']:
                 continue
             if att[0].find('array') != -1:
                 dt = ":class:`numpy.ndarray`"
@@ -165,12 +165,16 @@ class MyPyRenderer(ObjRenderer):
         type_lookup = {'float':'np.float_', 'integer':'np.int_', 
                        'string':'np.str_', 'datetime':'datetime.datetime',
                        'json':'np.str_', 'set':'set'}
+        dataset_destination = k.name
         d = {}
         s = "\n\n"
         s += "__{0:s} = _class_factory('__{0:s}', '{1:s}',\n".format(k.name,k.stereotype)
         s += "\tclass_attributes=[\n"
         attributes = []
         for n,att in k.attributes:
+            if n == "__dest__":
+                dataset_destination = att[2]
+                continue
             if n in ['resource_id', 'creation_time', 'modification_time']:
                 continue
             if att[0].find('reference') != -1:
@@ -232,6 +236,7 @@ class MyPyRenderer(ObjRenderer):
         s += self.build_documentation(k)
         s += "\n\n"
         s += "class _{0:s}(__{0:s}):\n\t'''\n\t'''\n".format(k.name)
+        s += "\t__dest__ = '{0:s}'".format(dataset_destination)
         d['code'] = s
         d['dependencies'] = dependencies 
         return d
