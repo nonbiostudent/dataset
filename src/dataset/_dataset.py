@@ -38,7 +38,7 @@ class Dataset(object):
     :param flux: List of all flux estimates that are part of the dataset.
     """
 
-    def __init__(self, filename, mode):
+    def __init__(self, filename):
         
         if _all_classes is None:
             raise ValueError("dataset.set_datamodel() must be called prior to " 
@@ -46,16 +46,16 @@ class Dataset(object):
         
         self.elements = {}
         self.base_elements = {}
+        
         for c in _all_classes:
             name = c.__name__.strip('_') 
             self.elements[c.__dest__] = []
-            #if self.elements.__dict__.has_key(c.__dest__):
-             #   raise ValueError("Forbidden element destination %s"%c.__dest__)
-            
-            #self.elements.__dict__[c.__dest__] = self.elements[c.__dest__]
             self.base_elements[name] = c
+            
         self._rids = {}
-        self._f = tables.open_file(filename, mode)
+        
+        
+        self._f = tables.open_file(filename, 'a')
         # Create an array of sha224 hash values; when
         # opening an existing file this will throw an
         # exception
@@ -63,7 +63,41 @@ class Dataset(object):
             self._f.create_earray('/','hash',tables.StringAtom(itemsize=28),(0,))
         except NodeError:
             pass
-
+        
+        
+        valid_names = [n[:-6] for n in self.base_elements] #names without "Buffer" suffix
+        
+        dest_name_map = {} #mapping between __dest__ values and class names
+        
+        #add in any destinations defined in the UML
+        for c in self.base_elements.values():
+            try:
+                valid_names.append(c.__dest__)
+                name = c.__name__.strip('_')
+                dest_name_map[c.__dest__] = name
+            except KeyError:
+                continue
+                 
+        for group in self._f.walk_groups('/'):
+            if group._v_name is '/' or group._v_name not in valid_names:
+                continue
+            for sgroup in group._v_groups.keys():
+                class_name = dest_name_map[group._v_name]
+                
+                _C = self.base_elements[class_name]
+                e = _C(group._v_groups[sgroup])
+                self.elements[group._v_name].append(e)
+        
+            
+    #add context manager methods to allow Dataset objects to be used with the 'with' statement 
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *args):
+        self.close()
+        return False
+    
+    
     def __del__(self):
         self._f.close()
     
@@ -131,7 +165,7 @@ class Dataset(object):
         # assign a new resource ID so that both objects can 
         # be referred to within the same session
         dstgroup = srcgroup._v_parent._v_pathname+'/'+ str(ResourceIdentifier())
-        created_dstgroup = False
+        
         # Create the new group
         dstgroup = self._newdst_group(dstgroup, title, filters)
 
@@ -193,37 +227,6 @@ class Dataset(object):
         pg = plugins[ftype.lower()]()
         return pg.read(self,filename,**kwargs)
     
-    @staticmethod
-    def open(filename):
-        """
-        Open an existing HDF5 file.
-        """
-        dnew = Dataset(filename,'r+')
-        
-        valid_names = [n[:-6] for n in dnew.base_elements] #names without "Buffer" suffix
-        
-        dest_name_map = {} #mapping between __dest__ values and class names
-        
-        #add in any destinations defined in the UML
-        for c in dnew.base_elements.values():
-            try:
-                valid_names.append(c.__dest__)
-                name = c.__name__.strip('_')
-                dest_name_map[c.__dest__] = name
-            except KeyError:
-                continue
-                 
-        for group in dnew._f.walk_groups('/'):
-            if group._v_name is '/' or group._v_name not in valid_names:
-                continue
-            for sgroup in group._v_groups.keys():
-                class_name = dest_name_map[group._v_name]
-                
-                _C = dnew.base_elements[class_name]
-                e = _C(group._v_groups[sgroup])
-                print "appending to %s"%group._v_name
-                dnew.elements[group._v_name].append(e)
-        return dnew
 
     def close(self):
         """
