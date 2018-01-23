@@ -53,7 +53,7 @@ class Dataset(object):
              #   raise ValueError("Forbidden element destination %s"%c.__dest__)
             
             #self.elements.__dict__[c.__dest__] = self.elements[c.__dest__]
-            self.base_elements[name+'Buffer'] = c
+            self.base_elements[name] = c
         self._rids = {}
         self._f = tables.open_file(filename, mode)
         # Create an array of sha224 hash values; when
@@ -171,7 +171,7 @@ class Dataset(object):
             if incomplete:
                 raise ValueError("You cannot add incomplete buffers if 'pedantic=True'.")
 
-        _C = self.base_elements[type(data_buffer).__name__]
+        _C = self.base_elements[type(data_buffer).__name__[:-6]] #strip 'Buffer' suffix
         group_name = _C.__dest__#_C.__name__.strip('_')
         rid = ResourceIdentifier()
         try:
@@ -219,7 +219,7 @@ class Dataset(object):
             for sgroup in group._v_groups.keys():
                 class_name = dest_name_map[group._v_name]
                 
-                _C = dnew.base_elements[class_name+'Buffer']
+                _C = dnew.base_elements[class_name]
                 e = _C(group._v_groups[sgroup])
                 print "appending to %s"%group._v_name
                 dnew.elements[group._v_name].append(e)
