@@ -198,13 +198,30 @@ class Dataset(object):
         """
         Open an existing HDF5 file.
         """
-        dnew = Dataset(filename,'r+')         
+        dnew = Dataset(filename,'r+')
+        
+        valid_names = [n[:-6] for n in dnew.base_elements] #names without "Buffer" suffix
+        
+        dest_name_map = {} #mapping between __dest__ values and class names
+        
+        #add in any destinations defined in the UML
+        for c in dnew.base_elements.values():
+            try:
+                valid_names.append(c.__dest__)
+                name = c.__name__.strip('_')
+                dest_name_map[c.__dest__] = name
+            except KeyError:
+                continue
+                 
         for group in dnew._f.walk_groups('/'):
-            if group._v_name is '/' or group._v_name+'Buffer' not in dnew.base_elements:
+            if group._v_name is '/' or group._v_name not in valid_names:
                 continue
             for sgroup in group._v_groups.keys():
-                _C = dnew.base_elements[group._v_name+'Buffer']
+                class_name = dest_name_map[group._v_name]
+                
+                _C = dnew.base_elements[class_name+'Buffer']
                 e = _C(group._v_groups[sgroup])
+                print "appending to %s"%group._v_name
                 dnew.elements[group._v_name].append(e)
         return dnew
 
