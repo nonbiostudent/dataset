@@ -250,6 +250,14 @@ class MyPyRenderer(ObjRenderer):
             return
         # If there aren't any dependencies it's safe to generate
         # the code
+        
+        #TODO -hack by Nial to fix circular dependencies
+#         fh.write(self.to_build[key]['code'])
+#         self.built.append(key)
+#         return
+        
+        #TODO
+        
         if len(self.to_build[key]['dependencies']) < 1:
             fh.write(self.to_build[key]['code'])
             self.built.append(key)
@@ -271,6 +279,20 @@ class MyPyRenderer(ObjRenderer):
             if i < len(self.built):
                 s += ", "
         s += "]\n"
+        
+        
+#         #add class name mapping
+#         s +="\n"
+#         s += "class_name_map = {"
+#         i = 0
+#         for k in self.built:
+#             i += 1
+#             s += "\'{:s}\':{:s}".format(k,k)
+#             if i < len(self.built):
+#                 s += ", "
+#         s += "}\n"
+        
+        
         return s
 
     def end_render(self):
