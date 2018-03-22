@@ -243,15 +243,25 @@ class DatamodelTestCase(unittest.TestCase):
         d = Dataset(tempfile.mktemp())
         rb = RawDataBuffer()
         with self.assertRaises(ValueError):
+            #cannot add incomplete buffers if pedantic
             d.new(rb, pedantic=True)
         d.register_tags(['WI001'])
+        
+        #create a complete buffer and try adding it
         tb = TargetBuffer(tags=['WI001'], name='White Island main vent',
+                          target_id="WI001",
                           position=(177.2, -37.5, 50),
                           position_error=(0.2, 0.2, 20),
                           description='Main vent in January 2017')
-        d.new(tb, pedantic=False)
+        
+        d.new(tb, pedantic=True)
+        
         with self.assertRaises(ValueError):
+            #can't add the same buffer twice if pedantic
             d.new(tb, pedantic=True)
+        
+        #can add the same buffer twice if not pedantic
+        d.new(tb, pedantic=False)
 
 
     def test_append(self):
@@ -283,10 +293,12 @@ class DatamodelTestCase(unittest.TestCase):
         self.assertEqual(np.array(r.ind_var[:]).size,4096)
         self.assertTrue(np.alltrue(np.array(r.d_var[:]) < 2))
         np.testing.assert_array_equal(np.array(r.datetime[:]).flatten(),[datetime.datetime(2017,1,10,15,23,0),datetime.datetime(2017,1,10,15,23,1)])
-        with self.assertRaises(ValueError):
-            r.append(rb1)
+
+        
         with self.assertRaises(AttributeError):
+            #cannot append to a non-expandable data element
             t.append(tb)
+            
         d.register_tags(['WI002'])
         tb1 = TargetBuffer(tags=['WI002'], name='Donald Duck',
                            position=(177.1, -37.4, 50),

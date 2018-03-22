@@ -187,12 +187,16 @@ class Dataset(object):
             raise RuntimeError(msg)
         return type(src)(dstgroup)
 
-    def new(self, data_buffer, pedantic=True):
+    def new(self, data_buffer, pedantic=True, expected_entries=None):
         """
         Create a new entry in the HDF5 file from the given data buffer.
+        
+        :param expected_entries: The number of entries you expect this entry to
+                                 hold.
+        :type expected_entries: integer or None
         """
         if pedantic:
-            # If data buffer is empty raise an exception
+            # If data buffer is incomplete raise an exception
             for k,v in data_buffer.__dict__.iteritems():
                 if k == 'tags':
                     continue
@@ -209,17 +213,9 @@ class Dataset(object):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             group = self._f.create_group('/'+group_name,str(rid))
-        e = _C(group,data_buffer, pedantic=pedantic)
+        e = _C(group,data_buffer, pedantic=pedantic, expected_entries=expected_entries)
         self.elements[group_name].append(e)
         return e         
-
-    def read(self, filename, ftype, **kwargs):
-        """
-        Read in a datafile.
-        """
-        plugins = get_registered_plugins()
-        pg = plugins[ftype.lower()]()
-        return pg.read(self,filename,**kwargs)
     
 
     def close(self):

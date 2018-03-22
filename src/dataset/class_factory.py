@@ -506,7 +506,7 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                  np.int64: tables.IntAtom(),
                  np.string_: tables.StringAtom(itemsize=128)}
 
-        def __init__(self, h5node, data_buffer=None, pedantic=True):
+        def __init__(self, h5node, data_buffer=None, pedantic=True, expected_entries=None):
             # Set the parent HDF5 group after type checking
             if (type(h5node) is not tables.group.Group):
                 raise Exception("%s and %s are incompatible types." %
@@ -584,30 +584,44 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
                     for key,val in vals.iteritems():
                         entry[key]  = val
                         s.update('{}'.format(val))
-                    for key, val in avals.iteritems():
-                        try:
-                            shape = list(val.shape)
-                            shape[0] = 0
-                            vl = f.create_earray(h5node, key, atom=self.dtmap[val.dtype.type],
-                                                shape=tuple(shape))
-                        except Exception, e:
-                            print key, val
-                            print val.dtype.type
-                            raise e
-                        vl.append(val)
-                        s.update('{}'.format(val))
+                    
+                    self._create_arrays(h5node, avals, expected_entries, s)
+                    
                     h = s.digest()
                     entry['hash'] = h
                     f = self._root._v_file
                     ea = f.root.hash
                     if pedantic and h in ea:
-                        msg = "You can't add the same dataset "
-                        msg += "more than once if 'pedantic=True'."
+                        msg = ("You can't add the same dataset "
+                               "more than once if 'pedantic=True'.")
                         raise ValueError(msg)
                     ea.append(np.array([h],dtype='S28'))
                     entry.append()
                     table.flush() 
-
+        
+        def _create_arrays(self, h5node, avals, expected_nrows, hash_obj):
+            
+            if expected_nrows is not None and expected_nrows != 1:
+                raise ValueError("DataElementBase does not support multiple "
+                                 "entries. Use ExpandableDataElement instead")
+            
+            f = h5node._v_file
+            for key, val in avals.iteritems():
+                try:
+                    vl = f.create_carray(h5node, key, 
+                                         atom=self.dtmap[val.dtype.type],
+                                         shape=val.shape,
+                                         filters=tables.Filters(complib='zlib', 
+                                                                complevel=5))
+                    vl[:] = val
+                except Exception, e:
+                    print key, val
+                    print val.dtype.type
+                    raise e
+                #vl.append(val)
+                hash_obj.update('{}'.format(val))
+        
+        
         @property
         def tags(self):
             return self._tags
@@ -671,11 +685,31 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
         """
         A base class with type checking for extendable elements in the datamodel.
         """
-        def __init__(self, h5node, data_buffer=None, pedantic=True):
+        def __init__(self, h5node, data_buffer=None, pedantic=True, expected_entries=None):
             super(ExpandableDataElement,self).__init__(h5node,data_buffer,pedantic)
             self.__dict__['modification_time'] = self.creation_time 
             h5node._v_attrs.modification_time = self.modification_time
-
+        
+        def _create_arrays(self, h5node, avals, expected_nrows, hash_obj):
+            
+            f = h5node._v_file
+            for key, val in avals.iteritems():
+                try:
+                    shape = list(val.shape)
+                    shape[0] = 0
+                    vl = f.create_earray(h5node, key, 
+                                         atom=self.dtmap[val.dtype.type],
+                                         expectedrows=expected_nrows,
+                                         shape=tuple(shape),
+                                         filters=tables.Filters(complib='zlib', 
+                                                                complevel=5))
+                except Exception, e:
+                    print key, val
+                    print val.dtype.type
+                    raise e
+                vl.append(val)
+                #do not include array data into the hash
+        
         def __repr__(self):
             msg = ''
             msg += "ID: {:s}\n".format(self._root._v_name)
@@ -695,47 +729,79 @@ def _class_factory(class_name, class_type='base', class_attributes=[], class_ref
 
         def append(self, databuffer, pedantic=True):
             table = getattr(self._root, 'data')
-            s = hashlib.sha1()
+            #s = hashlib.sha1()
             entry = table.row
             
-            for prop_name, prop_type in self._properties:
-                
-                #if prop_name in ['tags', 'creation_time', 'modification_time', 'resource_id']:
-                #    continue
-                
-                try:
-                    val = databuffer.__dict__[prop_name]
-                except KeyError:
-                    if pedantic:
+            if pedantic:
+                for prop_name, prop_type in self._properties:
+    
+                    try:
+                        val = databuffer.__dict__[prop_name]
+                    except KeyError:
                         msg = ("{} is missing a value for the {} field. Cannot "
                                "append incomplete buffers when 'pedantic=True'."
                                " ".format(str(databuffer), prop_name))
                         raise ValueError(msg)
-                    else:
-                        continue
                     
+                    
+            #only append data buffers whose fixed values match those of 
+            #the dataset entry they are being appended to
+            #we do this check here (prior to any values being appended) to
+            #to prevent corruption of an existing dataset
+            for key,val in databuffer.__dict__.iteritems():
+                if val is not None:
+                    try:
+                        prop_type = self._property_dict[key]
+                        
+                        if prop_type[0] == np.ndarray:
+                            continue #skip expandable entries
+                        
+                        if getattr(self, key) != val:
+                            msg = ("{} contains entry {} of value {} which does not"
+                                   " match the corresponding entry in the dataset "
+                                   "with value {}".format(str(databuffer), key, val,
+                                                          entry[key]))
+                            raise ValueError(msg)
+                    
+                    except KeyError:
+                        prop_type = self._reference_dict[key]
+                        
+                        if prop_type[0] == np.ndarray:
+                            ids = set([ResourceIdentifier(j).id for j in table[0][key]])
+                            
+                            if ids != set(val):
+                                msg = ("{} contains a list of references called {} with "
+                                   "resource ids {} which does"
+                                   " not match the corresponding entry in the "
+                                   "dataset with resource ids {}"
+                                   "".format(str(databuffer), key,val, ids)
+                                   )
+                        
+                        elif ResourceIdentifier(table[0][key]).id != val:
+                            msg = ("{} contains a reference to an {} with "
+                                   "resource id {} which does"
+                                   " not match the corresponding entry in the "
+                                   "dataset with resource id {}"
+                                   "".format(str(databuffer), 
+                                             str(ResourceIdentifier(table[0][key]).get_referred_object(),
+                                             val, ResourceIdentifier(table[0][key]).id))
+                                   )
+                            raise ValueError(msg)
+        
+                    
+            
             for key,val in databuffer.__dict__.iteritems():
                 
                 if val is not None:
                     try:
                         prop_type = self._property_dict[key]
                     except KeyError:
-                        prop_type = self._reference_dict[key]
+                        continue #property is a Reference (already checked for unknown keys in the buffer above)
                      
                     if prop_type[0] == np.ndarray:
                         vl = getattr(self._root,key)
                         vl.append(val)
-                    
-                    #TODO - check what to do with static values
-                    #else:
-                    #    entry[key] = val
-                    s.update('{}'.format(val))  
-                    
-            h = s.digest()
-            if h in table[:]['hash']:
-                raise ValueError('Entry already exists.')
-            entry['hash'] = h
-            entry.append()
+    
             table.flush()
             self.__dict__['modification_time'] = datetime.datetime.utcnow().isoformat()
             self._root._v_attrs.modification_time = self.modification_time
