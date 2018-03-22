@@ -192,19 +192,12 @@ class Dataset(object):
         Create a new entry in the HDF5 file from the given data buffer.
         """
         if pedantic:
-            s = hashlib.sha224()
             # If data buffer is empty raise an exception
-            incomplete = False
             for k,v in data_buffer.__dict__.iteritems():
                 if k == 'tags':
                     continue
-                if v is not None:
-                    if k in data_buffer._property_dict.keys():
-                        s.update('{}'.format(v))
-                else:
-                    incomplete = True
-            if incomplete:
-                raise ValueError("You cannot add incomplete buffers if 'pedantic=True'.")
+                if v is None:
+                    raise ValueError("You cannot add incomplete buffers if 'pedantic=True'.")
 
         _C = self.base_elements[type(data_buffer).__name__[:-6]] #strip 'Buffer' suffix
         group_name = _C.__dest__#_C.__name__.strip('_')
